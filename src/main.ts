@@ -2,6 +2,8 @@
 // import { Core } from './canvas';
 import './main.css';
 import { createWorker } from './worker';
+import * as vertexShaderSource from './shader/main.vert';
+import * as fragmentShaderSource from './shader/main.frag';
 
 // window.addEventListener('DOMContentLoaded', async () => {
 //   const canvas = document.querySelector('#webgl') as HTMLCanvasElement;
@@ -11,6 +13,7 @@ import { createWorker } from './worker';
 //   core.start();
 // }, false);
 
+/*
 let cameras = [
     {
         id: 0,
@@ -167,8 +170,24 @@ let cameras = [
         fx: 1159.5880733038064,
     },
 ];
+*/
 
-let camera = cameras[0];
+let camera = {
+  id: 0,
+  img_name: "00001",
+  width: 1959,
+  height: 1090,
+  position: [
+    -3.0089893469241797, -0.11086489695181866, -3.7527640949141428,
+  ],
+  rotation: [
+    [0.876134201218856, 0.06925962026449776, 0.47706599800804744],
+    [-0.04747421839895102, 0.9972110940209488, -0.057586739349882114],
+    [-0.4797239414934443, 0.027805376500959853, 0.8769787916452908],
+  ],
+  fy: 1164.6601287484507,
+  fx: 1159.5880733038064,
+};
 
 function getProjectionMatrix(fx, fy, width, height) {
     const znear = 0.2;
@@ -181,22 +200,22 @@ function getProjectionMatrix(fx, fy, width, height) {
     ].flat();
 }
 
-function getViewMatrix(camera) {
-    const R = camera.rotation.flat();
-    const t = camera.position;
-    const camToWorld = [
-        [R[0], R[1], R[2], 0],
-        [R[3], R[4], R[5], 0],
-        [R[6], R[7], R[8], 0],
-        [
-            -t[0] * R[0] - t[1] * R[3] - t[2] * R[6],
-            -t[0] * R[1] - t[1] * R[4] - t[2] * R[7],
-            -t[0] * R[2] - t[1] * R[5] - t[2] * R[8],
-            1,
-        ],
-    ].flat();
-    return camToWorld;
-}
+// function getViewMatrix(camera) {
+//     const R = camera.rotation.flat();
+//     const t = camera.position;
+//     const camToWorld = [
+//         [R[0], R[1], R[2], 0],
+//         [R[3], R[4], R[5], 0],
+//         [R[6], R[7], R[8], 0],
+//         [
+//             -t[0] * R[0] - t[1] * R[3] - t[2] * R[6],
+//             -t[0] * R[1] - t[1] * R[4] - t[2] * R[7],
+//             -t[0] * R[2] - t[1] * R[5] - t[2] * R[8],
+//             1,
+//         ],
+//     ].flat();
+//     return camToWorld;
+// }
 // function translate4(a, x, y, z) {
 //     return [
 //         ...a.slice(0, 12),
@@ -308,84 +327,13 @@ function translate4(a, x, y, z) {
     ];
 }
 
+/*
 const vertexShaderSource = `
-#version 300 es
-precision highp float;
-precision highp int;
-
-uniform highp usampler2D u_texture;
-uniform mat4 projection, view;
-uniform vec2 focal;
-uniform vec2 viewport;
-
-in vec2 position;
-in int index;
-
-out vec4 vColor;
-out vec2 vPosition;
-
-void main () {
-    uvec4 cen = texelFetch(u_texture, ivec2((uint(index) & 0x3ffu) << 1, uint(index) >> 10), 0);
-    vec4 cam = view * vec4(uintBitsToFloat(cen.xyz), 1);
-    vec4 pos2d = projection * cam;
-
-    float clip = 1.2 * pos2d.w;
-    if (pos2d.z < -clip || pos2d.x < -clip || pos2d.x > clip || pos2d.y < -clip || pos2d.y > clip) {
-        gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
-        return;
-    }
-
-    uvec4 cov = texelFetch(u_texture, ivec2(((uint(index) & 0x3ffu) << 1) | 1u, uint(index) >> 10), 0);
-    vec2 u1 = unpackHalf2x16(cov.x), u2 = unpackHalf2x16(cov.y), u3 = unpackHalf2x16(cov.z);
-    mat3 Vrk = mat3(u1.x, u1.y, u2.x, u1.y, u2.y, u3.x, u2.x, u3.x, u3.y);
-
-    mat3 J = mat3(
-        focal.x / cam.z, 0., -(focal.x * cam.x) / (cam.z * cam.z), 
-        0., -focal.y / cam.z, (focal.y * cam.y) / (cam.z * cam.z), 
-        0., 0., 0.
-    );
-
-    mat3 T = transpose(mat3(view)) * J;
-    mat3 cov2d = transpose(T) * Vrk * T;
-
-    float mid = (cov2d[0][0] + cov2d[1][1]) / 2.0;
-    float radius = length(vec2((cov2d[0][0] - cov2d[1][1]) / 2.0, cov2d[0][1]));
-    float lambda1 = mid + radius, lambda2 = mid - radius;
-
-    if(lambda2 < 0.0) return;
-    vec2 diagonalVector = normalize(vec2(cov2d[0][1], lambda1 - cov2d[0][0]));
-    vec2 majorAxis = min(sqrt(2.0 * lambda1), 1024.0) * diagonalVector;
-    vec2 minorAxis = min(sqrt(2.0 * lambda2), 1024.0) * vec2(diagonalVector.y, -diagonalVector.x);
-
-    vColor = clamp(pos2d.z/pos2d.w+1.0, 0.0, 1.0) * vec4((cov.w) & 0xffu, (cov.w >> 8) & 0xffu, (cov.w >> 16) & 0xffu, (cov.w >> 24) & 0xffu) / 255.0;
-    vPosition = position;
-
-    vec2 vCenter = vec2(pos2d) / pos2d.w;
-    gl_Position = vec4(
-        vCenter 
-        + position.x * majorAxis / viewport 
-        + position.y * minorAxis / viewport, 0.0, 1.0);
-
-}
 `.trim();
 
 const fragmentShaderSource = `
-#version 300 es
-precision highp float;
-
-in vec4 vColor;
-in vec2 vPosition;
-
-out vec4 fragColor;
-
-void main () {
-    float A = -dot(vPosition, vPosition);
-    if (A < -4.0) discard;
-    float B = exp(A) * vColor.a;
-    fragColor = vec4(B * vColor.rgb, B);
-}
-
 `.trim();
+*/
 
 let defaultViewMatrix = [
     0.47, 0.04, 0.88, 0, -0.11, 0.99, 0.02, 0, -0.88, -0.11, 0.47, 0, 0.07,
@@ -393,29 +341,31 @@ let defaultViewMatrix = [
 ];
 let viewMatrix = defaultViewMatrix;
 async function main() {
+    /*
     let carousel = true;
     const params = new URLSearchParams(location.search);
     try {
         viewMatrix = JSON.parse(decodeURIComponent(location.hash.slice(1)));
         carousel = false;
     } catch (err) {}
-    const url = './resource/train.splat';
+    */
     // const url = new URL(
     //     // "nike.splat",
     //     // location.href,
     //     params.get("url") || "train.splat",
     //     "https://huggingface.co/cakewalk/splat-data/resolve/main/",
     // );
+    const url = './resource/train.splat';
     const req = await fetch(url, {
         // mode: "cors", // no-cors, *cors, same-origin
         // credentials: "omit", // include, *same-origin, omit
     });
-    console.log(req);
-    if (req.status != 200)
-        throw new Error(req.status + " Unable to load " + req.url);
+    // console.log(req);
+    // if (req.status != 200)
+    //     throw new Error(req.status + " Unable to load " + req.url);
 
     const rowLength = 3 * 4 + 3 * 4 + 4 + 4;
-    const reader = req.body.getReader();
+    const readableStreamReader = req.body.getReader();
     const length = req.headers.get("content-length") as unknown as number;
     let splatData = new Uint8Array(length);
 
@@ -442,13 +392,13 @@ async function main() {
     });
 
     const vertexShader = gl.createShader(gl.VERTEX_SHADER);
-    gl.shaderSource(vertexShader, vertexShaderSource);
+    gl.shaderSource(vertexShader, vertexShaderSource.default);
     gl.compileShader(vertexShader);
     if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS))
         console.error(gl.getShaderInfoLog(vertexShader));
 
     const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
-    gl.shaderSource(fragmentShader, fragmentShaderSource);
+    gl.shaderSource(fragmentShader, fragmentShaderSource.default);
     gl.compileShader(fragmentShader);
     if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS))
         console.error(gl.getShaderInfoLog(fragmentShader));
@@ -573,38 +523,39 @@ async function main() {
         }
     };
 
-    let activeKeys = [];
-	let currentCameraIndex = 0;
+    // let activeKeys = [];
+    // let currentCameraIndex = 0;
 
+    /*
     window.addEventListener("keydown", (e) => {
-        // if (document.activeElement != document.body) return;
-        carousel = false;
-        if (!activeKeys.includes(e.code)) activeKeys.push(e.code);
-        if (/\d/.test(e.key)) {
-            currentCameraIndex = parseInt(e.key)
-            camera = cameras[currentCameraIndex];
-            viewMatrix = getViewMatrix(camera);
-        }
-		if (['-', '_'].includes(e.key)){
-			currentCameraIndex = (currentCameraIndex + cameras.length - 1) % cameras.length;
-			viewMatrix = getViewMatrix(cameras[currentCameraIndex]);
-		}
-		if (['+', '='].includes(e.key)){
-			currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
-			viewMatrix = getViewMatrix(cameras[currentCameraIndex]);
-		}
-        // camid.innerText = "cam  " + currentCameraIndex;
-        // if (e.code == "KeyV") {
-        //     location.hash =
-        //         "#" +
-        //         JSON.stringify(
-        //             viewMatrix.map((k) => Math.round(k * 100) / 100),
-        //         );
-        //         camid.innerText =""
-        // } else if (e.code === "KeyP") {
-        //     carousel = true;
-        //     camid.innerText =""
-        // }
+      // if (document.activeElement != document.body) return;
+      carousel = false;
+      if (!activeKeys.includes(e.code)) activeKeys.push(e.code);
+      if (/\d/.test(e.key)) {
+        currentCameraIndex = parseInt(e.key)
+        camera = cameras[currentCameraIndex];
+        viewMatrix = getViewMatrix(camera);
+      }
+      if (['-', '_'].includes(e.key)) {
+        currentCameraIndex = (currentCameraIndex + cameras.length - 1) % cameras.length;
+        viewMatrix = getViewMatrix(cameras[currentCameraIndex]);
+      }
+      if (['+', '='].includes(e.key)) {
+        currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
+        viewMatrix = getViewMatrix(cameras[currentCameraIndex]);
+      }
+      // camid.innerText = "cam  " + currentCameraIndex;
+      // if (e.code == "KeyV") {
+      //     location.hash =
+      //         "#" +
+      //         JSON.stringify(
+      //             viewMatrix.map((k) => Math.round(k * 100) / 100),
+      //         );
+      //         camid.innerText =""
+      // } else if (e.code === "KeyP") {
+      //     carousel = true;
+      //     camid.innerText =""
+      // }
     });
     window.addEventListener("keyup", (e) => {
         activeKeys = activeKeys.filter((k) => k !== e.code);
@@ -612,11 +563,12 @@ async function main() {
     window.addEventListener("blur", () => {
         activeKeys = [];
     });
+    */
 
     window.addEventListener(
         "wheel",
         (e) => {
-            carousel = false;
+            // carousel = false;
             e.preventDefault();
             const lineHeight = 10;
             const scale =
@@ -659,14 +611,14 @@ async function main() {
 
     let startX, startY, down;
     canvas.addEventListener("mousedown", (e) => {
-        carousel = false;
+        // carousel = false;
         e.preventDefault();
         startX = e.clientX;
         startY = e.clientY;
         down = e.ctrlKey || e.metaKey ? 2 : 1;
     });
     canvas.addEventListener("contextmenu", (e) => {
-        carousel = false;
+        // carousel = false;
         e.preventDefault();
         startX = e.clientX;
         startY = e.clientY;
@@ -723,13 +675,13 @@ async function main() {
         (e) => {
             e.preventDefault();
             if (e.touches.length === 1) {
-                carousel = false;
+                // carousel = false;
                 startX = e.touches[0].clientX;
                 startY = e.touches[0].clientY;
                 down = 1;
             } else if (e.touches.length === 2) {
                 // console.log('beep')
-                carousel = false;
+                // carousel = false;
                 startX = e.touches[0].clientX;
                 altX = e.touches[1].clientX;
                 startY = e.touches[0].clientY;
@@ -815,12 +767,12 @@ async function main() {
         { passive: false },
     );
 
-    let jumpDelta = 0;
+    // let jumpDelta = 0;
     let vertexCount = 0;
 
     let lastFrame = 0;
     let avgFps = 0;
-    let start = 0;
+    // let start = 0;
 
     window.addEventListener("gamepadconnected", (e) => {
         const gp = navigator.getGamepads()[e.gamepad.index];
@@ -836,6 +788,7 @@ async function main() {
 
     const frame = (now) => {
         let inv = invert4(viewMatrix);
+        /*
         let shiftKey = activeKeys.includes("Shift") || activeKeys.includes("ShiftLeft") || activeKeys.includes("ShiftRight")
 
         if (activeKeys.includes("ArrowUp")) {
@@ -962,9 +915,11 @@ async function main() {
             );
             inv = translate4(inv, 0, 0, -d);
         }
+        */
 
         viewMatrix = invert4(inv);
 
+        /*
         if (carousel) {
             let inv = invert4(defaultViewMatrix);
 
@@ -980,10 +935,11 @@ async function main() {
         } else {
             jumpDelta = Math.max(0, jumpDelta - 0.05);
         }
+        */
 
         let inv2 = invert4(viewMatrix);
-        inv2 = translate4(inv2, 0, -jumpDelta, 0);
-        inv2 = rotate4(inv2, -0.1 * jumpDelta, 1, 0, 0);
+        // inv2 = translate4(inv2, 0, -jumpDelta, 0);
+        // inv2 = rotate4(inv2, -0.1 * jumpDelta, 1, 0, 0);
         let actualViewMatrix = invert4(inv2);
 
         const viewProj = multiply4(projectionMatrix, actualViewMatrix);
@@ -1000,7 +956,7 @@ async function main() {
         } else {
             gl.clear(gl.COLOR_BUFFER_BIT);
             // document.getElementById("spinner").style.display = "";
-            start = Date.now() + 2000;
+            // start = Date.now() + 2000;
         }
         const progress = (100 * vertexCount) / (splatData.length / rowLength);
         if (progress < 100) {
@@ -1009,15 +965,16 @@ async function main() {
             // document.getElementById("progress").style.display = "none";
         }
         // fps.innerText = Math.round(avgFps) + " fps";
-        if (isNaN(currentCameraIndex)){
-            // camid.innerText = "";
-        }
+        // if (isNaN(currentCameraIndex)){
+        //     // camid.innerText = "";
+        // }
         lastFrame = now;
         requestAnimationFrame(frame);
     };
 
     frame(null);
 
+    /*
     const selectFile = (file) => {
         const fr = new FileReader();
         if (/\.json$/i.test(file.name)) {
@@ -1081,14 +1038,18 @@ async function main() {
         e.stopPropagation();
         selectFile(e.dataTransfer.files[0]);
     });
+    */
+
+    // @@@
+    // ストリームで読み込み、splatData.set() で開始位置をずらしながらデータをセットしている
 
     let bytesRead = 0;
     let lastVertexCount = -1;
-    let stopLoading = false;
+    // let stopLoading = false;
 
     while (true) {
-        const { done, value } = await reader.read();
-        if (done || stopLoading) break;
+        const { done, value } = await readableStreamReader.read();
+        if (done) break;
 
         splatData.set(value, bytesRead);
         bytesRead += value.length;
@@ -1101,7 +1062,7 @@ async function main() {
             lastVertexCount = vertexCount;
         }
     }
-    if (!stopLoading)
+    // if (!stopLoading)
         worker.postMessage({
             buffer: splatData.buffer,
             vertexCount: Math.floor(bytesRead / rowLength),
