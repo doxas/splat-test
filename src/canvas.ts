@@ -1,0 +1,1 @@
+import { Pane } from 'tweakpane';
