@@ -63,6 +63,12 @@ async function main() {
     gl.ONE_MINUS_DST_ALPHA,
     gl.ONE,
   );
+  // gl.blendFuncSeparate(
+  //   gl.ONE,
+  //   gl.ONE_MINUS_SRC_ALPHA,
+  //   gl.ONE,
+  //   gl.ONE,
+  // );
   gl.blendEquationSeparate(gl.FUNC_ADD, gl.FUNC_ADD);
 
   const u_projection = gl.getUniformLocation(program, "projection");
@@ -137,8 +143,8 @@ async function main() {
       link.href = URL.createObjectURL(blob);
       document.body.appendChild(link);
       link.click();
-    } else if (e.data.texdata) {
-      const { texdata, texwidth, texheight } = e.data;
+    } else if (e.data.textureData) {
+      const { textureData, textureWidth, textureHeight } = e.data;
       // console.log(texdata)
       gl.bindTexture(gl.TEXTURE_2D, texture);
       gl.texParameteri(
@@ -158,12 +164,12 @@ async function main() {
         gl.TEXTURE_2D,
         0,
         gl.RGBA32UI,
-        texwidth,
-        texheight,
+        textureWidth,
+        textureHeight,
         0,
         gl.RGBA_INTEGER,
         gl.UNSIGNED_INT,
-        texdata,
+        textureData,
       );
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -183,7 +189,7 @@ async function main() {
   }
   const rowLength = 3 * 4 + 3 * 4 + 4 + 4;
   const url = './resource/train.splat';
-  let splatData = null;
+  let splatData: Uint8Array = null;
   let currentLength = 0;
   const loader = new StreamLoader();
   loader.on('getcontentbytelength', (byte: number) => {
