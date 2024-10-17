@@ -33,34 +33,27 @@ let camera = {
 
 async function main() {
   const canvas = document.getElementById("webgl") as HTMLCanvasElement;
-
-  let projectionMatrix;
-
-  const gl = canvas.getContext("webgl2", {
-    antialias: false,
-  });
+  const gl = canvas.getContext("webgl2", { antialias: false, });
 
   const vertexShader = gl.createShader(gl.VERTEX_SHADER);
   gl.shaderSource(vertexShader, vertexShaderSource.default);
   gl.compileShader(vertexShader);
-  if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS))
-    console.error(gl.getShaderInfoLog(vertexShader));
+  if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(vertexShader));
 
   const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
   gl.shaderSource(fragmentShader, fragmentShaderSource.default);
   gl.compileShader(fragmentShader);
-  if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS))
-    console.error(gl.getShaderInfoLog(fragmentShader));
+  if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) console.error(gl.getShaderInfoLog(fragmentShader));
 
   const program = gl.createProgram();
   gl.attachShader(program, vertexShader);
   gl.attachShader(program, fragmentShader);
   gl.linkProgram(program);
   gl.useProgram(program);
-
   if (!gl.getProgramParameter(program, gl.LINK_STATUS)) console.error(gl.getProgramInfoLog(program));
 
-  gl.disable(gl.DEPTH_TEST); // Disable depth testing
+  // Disable depth testing
+  gl.disable(gl.DEPTH_TEST);
 
   // Enable blending
   gl.enable(gl.BLEND);
@@ -99,6 +92,8 @@ async function main() {
   gl.bindBuffer(gl.ARRAY_BUFFER, indexBuffer);
   gl.vertexAttribIPointer(a_index, 1, gl.INT, 0, 0);
   gl.vertexAttribDivisor(a_index, 1);
+
+  let projectionMatrix;
 
   const resize = () => {
     gl.uniform2fv(u_focal, new Float32Array([camera.fx, camera.fy]));
